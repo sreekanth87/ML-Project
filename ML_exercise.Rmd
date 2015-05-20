@@ -1,0 +1,85 @@
+---
+title: "Machine Learning for Exercise Efficacy"
+author: "SM"
+date: "Tuesday, May 19, 2015"
+output: html_document
+---
+**Summary**
+The data is loaded and cleaned. 12 features are selected -- the roll,yaw, and pitch readings of the four sensors. The rest of the data is summarization of these variables. Thus, only the basic actual values are chosen as predictors to avoid any multi-collinearity among the predictors. Small number of predictors prevents overfitting. The training data is split into training set (70%) and test set (70%).
+
+```{r}
+library(knitr)
+library(caret)
+library(ggplot2)
+library(rpart.plot)
+library(randomForest)
+dTrain<-read.csv("~/pml-training.csv", header=T, na.string=c("",NA))
+dTest<-read.csv("~/pml-testing.csv", header=T, na.string=c("",NA))
+
+#selecting the roll,yaw, and pitch readings of the four sensors and the outcome variable -- classe.
+val<-c(8,9,10,46,47,48,84,85,86,122,123,124,160)
+dfTrain<-dTrain[,val]
+inTrain<-createDataPartition(dfTrain$classe, p=0.7, list=FALSE)
+dfSubTrain<-dfTrain[inTrain,]
+dfSubTest<-dfTrain[-inTrain,]
+```
+
+**Models**
+Four models are constructed with 12 predictors. 
+-  Model 1: Model based prediction with linear discriminat analysis method
+-  Model 2: Trees
+-  Model 3: Random forests 
+-  Model 4: Combination of above models
+
+**1. Model based prediction**
+```{r}
+fit1<-train(classe~., data=dfSubTrain, method="lda")
+pMBP<-predict(fit1,dfSubTest)
+confusionMatrix(dfSubTest$classe, pMBP)
+```
+
+**2. Prediction with Tree**
+```{r}
+fit2<-rpart(classe~.,data=dfSubTrain, method="class")
+pTree<-predict(fit2,dfSubTest, type="class")
+confusionMatrix(dfSubTest$classe,pTree)
+rpart.plot(fit2, main="Classification Tree")
+```
+
+**3. Prediction with Random forests***
+```{r}
+fit3<-randomForest(classe~.,data=dfSubTrain, method="class")
+pRF<-predict(fit3,dfSubTest, type="class")
+confusionMatrix(dfSubTest$classe,pRF)
+```
+
+**4. Combining predictors**
+```{r}
+pred<-data.frame(pTree,pRF,pMBP, classe=dfSubTest$classe)
+fitcom<-train(classe~.,data=pred,method="rf")
+pCom<-predict(fitcom, dfSubTest)
+confusionMatrix(dfSubTest$classe, pCom)
+```
+
+**Results**
+```{r}
+pred<-predict(fit3, dTest)
+pred
+```
+
+**Conclusion**
+Model 3 with random forests is the best model with highest prediction accuracy -- 99% with 95% CI (0.9852, 0.9909). Combining predictors do not facilitate any improved accuracy, and it might be lead to over fitting on the test data. The in sample error is observed (1%) by generating the confusion matrices for the predictions of the test data set that was splitted from the training data. 
+
+**Submission**
+```{r, eval=FALSE}
+pml_write_files<-function(x){
+  n<-length(x)
+  for (i in 1:n){
+    filename<-paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+  }
+}
+
+pml_write_files(pred)
+```
